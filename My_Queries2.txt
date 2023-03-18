@@ -1,0 +1,62 @@
+/* Query used for Insight 1 */
+
+SELECT film_title, category_name,rental_count,
+   AVG(rental_count) AS avg_rental_count
+  FROM
+     (SELECT t1.title AS film_title, t1.name AS category_name,
+ 	   COUNT(ren) OVER (PARTITION BY ren.customer_id ORDER BY t1.name,t1.title) AS rental_count	 
+ 	    FROM inventory AS inv
+ 	    JOIN
+    	   (SELECT f.title, c.name, f.film_id
+     	      FROM film_category AS fc
+     	      JOIN category AS c
+     	        ON fc.category_id = c.category_id
+     	      JOIN film AS f
+     	        ON fc.film_id = f.film_id) AS t1
+  	      ON inv.film_id = t1.film_id
+	    JOIN rental AS ren
+  	      ON ren.inventory_id = inv.inventory_id) AS t2
+GROUP BY film_title,category_name,rental_count
+
+
+/* Query used for Insight 2 */
+
+SELECT f.title, c.name, f.rental_duration,
+  NTILE(4) OVER (PARTITION BY f.rental_duration ORDER BY c.name) As standard_quartile
+  FROM film_category AS fc
+  JOIN category AS c
+    ON fc.category_id = c.category_id
+  JOIN film AS f
+    ON fc.film_id = f.film_id
+
+/* Query used for Insight 3 */
+
+WITH family_count AS (SELECT c.name, f.rental_duration, 
+		      NTILE(4) OVER (PARTITION BY f.rental_duration) As standard_quartile,
+         	      COUNT(c.name) AS count
+		       FROM film_category AS fc
+                       JOIN category AS c
+                         ON fc.category_id = c.category_id
+                       JOIN film AS f
+                         ON fc.film_id = f.film_id
+		      GROUP BY c.name,f.rental_duration)
+
+SELECT family_count.name, family_count.standard_quartile,family_count.count
+  FROM family_count
+  GROUP BY family_count.name,family_count.standard_quartile,family_count.count
+  ORDER BY family_count.name
+  
+
+/* Query used for Insight 4 */
+
+SELECT
+      DATE_PART('month',ren.rental_date) AS rental_month,
+      DATE_PART('year',ren.rental_date) AS rental_year,
+      st.store_id as store_id,
+      COUNT(ren.customer_id) OVER main_window AS count_rental
+ FROM staff AS sf
+ JOIN store AS st
+   ON sf.store_id = st.store_id
+ JOIN rental AS ren
+   ON ren.staff_id = sf.staff_id
+WINDOW  main_window AS (ORDER BY ren.customer_id DESC)
